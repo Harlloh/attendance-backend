@@ -1,0 +1,76 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AttendanceRecord {
+  id                String   @id @default(cuid())
+  sessionId         String
+  session           Session  @relation(fields: [sessionId], references: [id])
+  name              String
+  stateCode         String
+  queueNumber       Int
+  deviceFingerprint String
+  addedByAdmin      Boolean  @default(false)
+  timestamp         DateTime @default(now())
+
+  @@unique([sessionId, stateCode])
+  @@unique([sessionId, queueNumber])
+  @@unique([sessionId, deviceFingerprint])
+}
+
+model LGA {
+  id        String    @id @default(cuid()) // use official LGA code e.g. "OY-IBADAN-NORTH"
+  name      String    @unique
+  latitude  Float? // nullable until admin sets it
+  longitude Float? // nullable until admin sets it
+  radius    Int? // nullable until admin sets it
+  updatedAt DateTime? @updatedAt
+  createdAt DateTime  @default(now())
+
+  admin    Admin?
+  sessions Session[]
+}
+
+model Admin {
+  id       String @id @default(cuid())
+  email    String @unique
+  password String
+  lgaId    String @unique // @unique = one admin per LGA, enforced at DB level
+  lga      LGA?   @relation(fields: [lgaId], references: [id])
+
+  sessions          Session[]
+  verificationToken VerificationToken?
+}
+
+model Session {
+  id         String             @id @default(cuid())
+  lgaId      String
+  lga        LGA                @relation(fields: [lgaId], references: [id])
+  adminId    String
+  admin      Admin              @relation(fields: [adminId], references: [id])
+  cdsGroup   String
+  date       DateTime           @default(now())
+  isOpen     Boolean            @default(false)
+  openedAt   DateTime?
+  closedAt   DateTime?
+  attendance AttendanceRecord[]
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  adminId   String   @unique
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
