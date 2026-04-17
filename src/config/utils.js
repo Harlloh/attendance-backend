@@ -2,11 +2,16 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { prisma } from './db.js';
 export const generateAccessToken = (adminId, res) => {
-    const token = jwt.sign({ id: adminId }, process.env.JWT_ACCESS_SECRET, { expiresIn: process.env.ACCESS_EXPIRY_TIME || '30m' })
+    const expiryTime = process.env.ACCESS_EXPIRY_TIME || '30m';
+    const token = jwt.sign({ id: adminId }, process.env.JWT_ACCESS_SECRET, { expiresIn: expiryTime })
+    // Parse expiry time to milliseconds (default: 30 minutes)
+
+    const maxAgeMs = parseInt(expiryTime.replace('m', '')) * 60 * 1000;
     res.cookie('accessToken', token, {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
+        maxAge: maxAgeMs
     })
     return token;
 }
@@ -25,11 +30,12 @@ export const generateRefreshToken = async (adminId, res) => {
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
             }
         });
+
         res.cookie('refreshToken', token, {
             httpOnly: true,
             secure: true,
             sameSite: 'none',
-            maxAge: 30 * 24 * 60 * 60 * 1000 ///7 days in milli second
+            maxAge: parseInt(process.env.REFRESH_EXPIRY_TIME) * 24 * 60 * 60 * 1000 ///30 days in milli second
         })
         return token
     } catch (error) {

@@ -21,8 +21,14 @@ app.use(express.urlencoded({ extended: true }))
 
 
 app.use('/auth', authRoutes)
-app.use(authMiddleware)
-app.use('/admin', adminRoutes)
+// app.use()
+app.use('/admin', authMiddleware, adminRoutes)
+app.use((req, res) => {
+    res.status(404).json({
+        error: `Route ${req.originalUrl} not found`,
+        code: 'NOT_FOUND'
+    });
+});
 
 
 const server = app.listen(port, () => console.log(`listening to port ${port}`))
