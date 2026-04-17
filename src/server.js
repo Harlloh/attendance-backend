@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import adminRoutes from './routes/adminRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import { connectDB, disconnectDB } from './config/db.js';
+import { authMiddleware } from './middleware/authMiddleware.js';
 
 connectDB();
 
@@ -19,8 +20,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }))
 
 
-app.use('/', adminRoutes)
 app.use('/auth', authRoutes)
+app.use(authMiddleware)
+app.use('/admin', adminRoutes)
 
 
 const server = app.listen(port, () => console.log(`listening to port ${port}`))

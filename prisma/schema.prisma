@@ -29,25 +29,31 @@ model AttendanceRecord {
 }
 
 model LGA {
-  id        String    @id @default(cuid()) // use official LGA code e.g. "OY-IBADAN-NORTH"
-  name      String    @unique
+  id    String @id @default(cuid()) // use official LGA code e.g. "OY-IBADAN-NORTH"
+  name  String @unique
+  state String
+
   latitude  Float? // nullable until admin sets it
   longitude Float? // nullable until admin sets it
   radius    Int? // nullable until admin sets it
   updatedAt DateTime? @updatedAt
   createdAt DateTime  @default(now())
 
-  admin    Admin?
+  adminId String? @unique
+  admin   Admin?  @relation(fields: [adminId], references: [id])
+
   sessions Session[]
+
+  @@unique([name, state])
+  @@index([state])
 }
 
 model Admin {
   id       String @id @default(cuid())
   email    String @unique
   password String
-  lgaId    String @unique // @unique = one admin per LGA, enforced at DB level
-  lga      LGA?   @relation(fields: [lgaId], references: [id])
 
+  lga               LGA?
   sessions          Session[]
   verificationToken VerificationToken?
 }
