@@ -25,7 +25,7 @@ export const loginController = async (req, res) => {
             admin: {
                 id: user.id,
                 email: user.email,
-                lga: user.lga ? {
+                lgaDetails: user.lga ? {
                     id: user.lga.id,
                     name: user.lga.name,
                     state: user.lga.state,

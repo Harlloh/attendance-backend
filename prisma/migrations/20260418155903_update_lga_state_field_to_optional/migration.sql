@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "LGA" ALTER COLUMN "state" DROP NOT NULL;

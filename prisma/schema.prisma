@@ -29,9 +29,9 @@ model AttendanceRecord {
 }
 
 model LGA {
-  id    String @id @default(cuid()) // use official LGA code e.g. "OY-IBADAN-NORTH"
-  name  String @unique
-  state String
+  id    String  @id @default(cuid()) // use official LGA code e.g. "OY-IBADAN-NORTH"
+  name  String  @unique
+  state String?
 
   latitude  Float? // nullable until admin sets it
   longitude Float? // nullable until admin sets it

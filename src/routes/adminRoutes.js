@@ -1,8 +1,8 @@
 import express from 'express';
-import { adminTestController } from '../controllers/adminController.js';
+import { updateLgaDetails } from '../controllers/adminController.js';
 
 const router = express.Router();
 
-router.get('/', adminTestController)
+router.post('/update-lga', updateLgaDetails)
 
 export default router
