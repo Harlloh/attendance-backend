@@ -33,19 +33,17 @@ model LGA {
   name  String  @unique
   state String?
 
-  latitude  Float? // nullable until admin sets it
-  longitude Float? // nullable until admin sets it
-  radius    Int? // nullable until admin sets it
-  updatedAt DateTime? @updatedAt
-  createdAt DateTime  @default(now())
+  latitude    Float? // nullable until admin sets it
+  longitude   Float? // nullable until admin sets it
+  radius      Int? // nullable until admin sets it
+  checkInSlug String    @unique
+  updatedAt   DateTime? @updatedAt
+  createdAt   DateTime  @default(now())
 
   adminId String? @unique
   admin   Admin?  @relation(fields: [adminId], references: [id])
 
   sessions Session[]
-
-  @@unique([name, state])
-  @@index([state])
 }
 
 model Admin {
@@ -56,19 +54,29 @@ model Admin {
   lga               LGA?
   sessions          Session[]
   verificationToken VerificationToken?
+
+  updatedAt DateTime? @updatedAt
+  createdAt DateTime  @default(now())
 }
 
 model Session {
-  id         String             @id @default(cuid())
-  lgaId      String
-  lga        LGA                @relation(fields: [lgaId], references: [id])
-  adminId    String
-  admin      Admin              @relation(fields: [adminId], references: [id])
-  cdsGroup   String
-  date       DateTime           @default(now())
-  isOpen     Boolean            @default(false)
-  openedAt   DateTime?
-  closedAt   DateTime?
+  id    String @id @default(cuid())
+  lgaId String
+  lga   LGA    @relation(fields: [lgaId], references: [id])
+
+  adminId String
+  admin   Admin  @relation(fields: [adminId], references: [id])
+
+  date DateTime @default(now())
+
+  isOpen Boolean @default(false)
+
+  autoOpenAt  DateTime?
+  autoCloseAt DateTime?
+
+  openedAt DateTime?
+  closedAt DateTime?
+
   attendance AttendanceRecord[]
 }
 

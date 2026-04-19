@@ -32,6 +32,8 @@ export const loginController = async (req, res) => {
                     latitude: user.lga.latitude,
                     longitude: user.lga.longitude,
                     radius: user.lga.radius,
+                    radius: user.lga.radius,
+                    checkInSlug: user.lga.checkInSlug
                 } : null
             }
         })
