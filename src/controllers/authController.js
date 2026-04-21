@@ -8,7 +8,7 @@ export const loginController = async (req, res) => {
 
         const user = await prisma.admin.findFirst({
             where: { email: email },
-            include: { lga: true }
+            include: { lga: true, sessions: true }
         })
         if (!user) {
             return res.json({ success: false, message: 'Invalid Credentials' })
@@ -34,6 +34,11 @@ export const loginController = async (req, res) => {
                     radius: user.lga.radius,
                     radius: user.lga.radius,
                     checkInSlug: user.lga.checkInSlug
+                } : null,
+                sessionDetails: user.sessions ? {
+                    isSessionOpen: user.sessions.isOpen,
+                    sessionId: user.sessions.id,
+                    openedAt: user.sessions.openedAt,
                 } : null
             }
         })
