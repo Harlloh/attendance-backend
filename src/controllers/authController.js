@@ -20,7 +20,9 @@ export const loginController = async (req, res) => {
         }
         generateAccessToken(user.id, res)
         await generateRefreshToken(user.id, res)
-        console.log(user, 'THis is the user response from the db');
+        // console.log(user.sessions, 'THis is the user response from the db');
+        const sessionDetails = user.sessions.length > 1 ? user.sessions[user.sessions.length - 1] : user.sessions[0]
+        console.log(sessionDetails, user.sessions);
         return res.status(200).json({
             success: true,
             admin: {
@@ -36,7 +38,7 @@ export const loginController = async (req, res) => {
                     radius: user.lga.radius,
                     checkInSlug: user.lga.checkInSlug
                 } : null,
-                sessionDetails: user.sessions[0] ? user?.sessions[-1] : null
+                sessionDetails: sessionDetails ? sessionDetails : null
             }
         })
     } catch (error) {
