@@ -44,16 +44,31 @@ export const openSession = async (req, res) => {
     const adminId = req.admin.id;
     try {
         // need the admin's lgaId to associate the session
-        const admin = await prisma.admin.findUnique({
-            where: { id: adminId },
-            include: { lga: true }
-        });
 
+        const [admin, existingSession] = await Promise.all([
+            prisma.admin.findUnique({
+                where: { id: adminId },
+                include: { lga: true }
+            }),
+            prisma.session.findFirst({
+                where: {
+                    adminId,
+                    isOpen: true
+                }
+            })
+        ]);
         if (!admin?.lga) {
             return res.status(400).json({
                 success: false,
                 message: 'LGA not configured. Set up geofence first.'
             });
+        };
+
+        if (existingSession) {
+            return res.status(400).json({
+                success: false,
+                message: 'You already have an open session'
+            })
         }
 
         const session = await prisma.session.create({
@@ -77,24 +92,33 @@ export const closeSession = async (req, res) => {
     const adminId = req.admin.id;
 
     try {
+
+        const sessionExist = await prisma.session.findUnique({
+            where: { id: sessionId, adminId }
+        })
+        if (!sessionExist) {
+            return res.status(400).json({ success: false, message: "Session does not exist." })
+        }
+        if (!sessionExist.isOpen) {
+            return res.status(400).json({ success: false, message: "Session is closed already" })
+        }
+
         const session = await prisma.session.update({
-            where: { id: sessionId, adminId },
+            where: { id: sessionId },
             data: {
                 isOpen: false,
                 closedAt: new Date(),
             }
         });
 
-        if (!session) {
-            return res.status(400).json({
-                success: false,
-                message: 'Session not found'
-            });
-        }
-
-        res.status(200).json({ success: true, session });
+        res.status(200).json({ success: true, message: 'session closed successfully', session });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Failed to close session.' });
     }
 };
+
+
+export const manualAssignment = async (req, res) => {
+
+}
