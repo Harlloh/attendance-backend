@@ -75,7 +75,8 @@ export const openSession = async (req, res) => {
         if (existingSession) {
             return res.status(400).json({
                 success: false,
-                message: 'You already have an open session'
+                message: 'You already have an open session',
+                session: existingSession
             })
         }
 
@@ -111,7 +112,7 @@ export const closeSession = async (req, res) => {
             return res.status(400).json({ success: false, message: "Session does not exist." })
         }
         if (!sessionExist.isOpen) {
-            return res.status(400).json({ success: false, message: "Session is closed already" })
+            return res.status(400).json({ success: false, message: "Session is closed already", session: sessionExist })
         }
 
         const session = await prisma.session.update({
@@ -145,9 +146,10 @@ export const manualAssignment = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Session cannot be found' })
         }
         const attendance = await handleNumberAssignment(true, sessionId, stateCode, name,)
-        console.log(attendance, '****');
+
         res.status(201).json({ success: true, message: 'Number assigned successfully.', attendance });
-    } catch (error) {
+    }
+    catch (error) {
         if (error.code === 'P2002') {
             return res.status(409).json({ success: false, message: 'Corps member already has a number for this session.' });
         }
@@ -170,7 +172,7 @@ export const handleNumberAssignment = async (addedByAdmin, sessionId, stateCode,
                 name,
                 stateCode,
                 queueNumber: nextNumber,
-                deviceFingerprint: addedByAdmin ? 'added_by_admin' : deviceFingerprint,// resolve this first,
+                deviceFingerprint: addedByAdmin ? null : deviceFingerprint,// resolve this first,
                 addedByAdmin,
             }
         })

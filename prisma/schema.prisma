@@ -19,7 +19,7 @@ model AttendanceRecord {
   name              String
   stateCode         String
   queueNumber       Int
-  deviceFingerprint String
+  deviceFingerprint String?
   addedByAdmin      Boolean  @default(false)
   timestamp         DateTime @default(now())
 
