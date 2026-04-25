@@ -3,6 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import adminRoutes from './routes/adminRoutes.js'
 import authRoutes from './routes/authRoutes.js'
+import userRoute from './routes/userRoutes.js'
 import { connectDB, disconnectDB } from './config/db.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
 
@@ -21,6 +22,7 @@ app.use(express.urlencoded({ extended: true }))
 
 
 app.use('/auth', authRoutes)
+app.use('/user', userRoute)
 // app.use()
 app.use('/admin', authMiddleware, adminRoutes)
 app.use((req, res) => {
