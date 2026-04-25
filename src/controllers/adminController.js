@@ -179,3 +179,65 @@ export const handleNumberAssignment = async (addedByAdmin, sessionId, stateCode,
     })
     return attendanceRecord
 }
+
+
+export const getAttendanceList = async (req, res) => {
+    const { sessionId } = req.query
+    const pageSize = parseInt(req.query.pageSize);
+    const pageIndex = parseInt(req.query.pageIndex);
+
+    if (!pageSize || !pageIndex) {
+        return res.status(400).json({ success: false, message: 'The pagesize and page index is required' })
+    }
+
+    try {
+        const skip = (pageIndex - 1) * pageSize
+        const [attendance, totalCount] = await Promise.all([
+            prisma.attendanceRecord.findMany({
+                where: { sessionId },
+                take: pageSize,
+                skip,
+            }),
+            prisma.attendanceRecord.count({
+                where: { sessionId }
+            })
+        ])
+        const hasMore = pageIndex * pageSize < totalCount
+
+        console.log(attendance, hasMore);
+        res.status(200).json({ success: true, message: 'Testing', attendanceList: attendance, hasMore, totalCount })
+
+    } catch (error) {
+        console.error('Attendance list getting error:', error.message)
+        return res.status(500).json({ success: false, message: 'Internal server error' })
+    }
+}
+
+export const searchAttendance = async (req, res) => {
+    const { sessionId, query } = req.query
+
+    if (!sessionId) {
+        return res.status(400).json({ success: false, message: 'sessionId is required' })
+    }
+    if (!query) {
+        return res.status(400).json({ success: false, message: 'query is required' })
+    }
+
+    try {
+        const results = await prisma.attendanceRecord.findMany({
+            where: {
+                sessionId,
+                OR: [
+                    { name: { contains: query, mode: 'insensitive' } },
+                    { stateCode: { contains: query, mode: 'insensitive' } }
+                ]
+            },
+            take: 20
+        })
+
+        return res.status(200).json({ success: true, results })
+    } catch (error) {
+        console.error('Attendance search error:', error.message)
+        return res.status(500).json({ success: false, message: 'Internal server error' })
+    }
+}
