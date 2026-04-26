@@ -113,34 +113,27 @@ export const refreshAccessToken = async (req, res) => {
 }
 
 export const logout = async (req, res) => {
-    console.log(req.cookies);
     const { refreshToken } = req.cookies;
-    console.log('This should be the refresh token: ', refreshToken);
     try {
         if (refreshToken) {
             await prisma.verificationToken.delete({
-                where: { token: refreshToken }
+                where: { token: refreshToken }  // delete THIS device's token only
             });
         }
-        res.cookie('accessToken', '', {
-            expires: new Date(0),
-            httpOnly: true,
-        });
-
-        res.cookie('refreshToken', '', {
-            expires: new Date(0),
-            httpOnly: true,
-        });
-        res.status(200).json({
-            success: true, message: 'User logged out successfully'
-        });
     } catch (error) {
         if (error.code === 'P2025') {
-            console.log('User token not found, user session logged in a different sesssion');
-            res.status(400).json({ success: false, message: 'Error loging out', code: 'NO_REFRESH_TOKEN' })
-        };
-        res.status(500).json({ success: false, message: 'Internal server error' })
+            // Token already gone (other device logged out, or expired)
+            // This is fine — still clear cookies and proceed
+            console.log('Refresh token not found — already invalidated or logged out elsewhere');
+        } else {
+            // Actual unexpected error
+            return res.status(500).json({ success: false, message: 'Internal server error' });
+        }
     }
 
+    // Always clear cookies, regardless of whether DB delete succeeded
+    res.clearCookie('accessToken', { httpOnly: true });
+    res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'none' });
 
-}
+    return res.status(200).json({ success: true, message: 'Logged out successfully' });
+};
