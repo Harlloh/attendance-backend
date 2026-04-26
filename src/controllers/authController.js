@@ -22,7 +22,6 @@ export const loginController = async (req, res) => {
         await generateRefreshToken(user.id, res)
         // console.log(user.sessions, 'THis is the user response from the db');
         const sessionDetails = user.sessions.length > 1 ? user.sessions[user.sessions.length - 1] : user.sessions[0]
-        console.log(sessionDetails, user.sessions);
         return res.status(200).json({
             success: true,
             admin: {
