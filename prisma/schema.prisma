@@ -53,7 +53,7 @@ model Admin {
 
   lga               LGA?
   sessions          Session[]
-  verificationToken VerificationToken?
+  verificationToken VerificationToken[]
 
   updatedAt DateTime? @updatedAt
   createdAt DateTime  @default(now())
@@ -83,8 +83,8 @@ model Session {
 model VerificationToken {
   id        String   @id @default(cuid())
   token     String   @unique
-  adminId   String   @unique
-  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  adminId   String
   expiresAt DateTime
   createdAt DateTime @default(now())
+  admin     Admin    @relation(fields: [adminId], references: [id])
 }

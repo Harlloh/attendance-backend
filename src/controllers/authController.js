@@ -87,7 +87,7 @@ export const refreshAccessToken = async (req, res) => {
     const token = await prisma.verificationToken.findFirst({
         where: { token: refreshToken }
     })
-    console.log(token);
+    console.log('This should be the token: ', token);
     if (!token) {
         return res.status(400).json({ success: false, message: "Invalid refresh token missing!", code: 'INVALID_REFRESH_TOKEN' })
     }
@@ -115,21 +115,32 @@ export const refreshAccessToken = async (req, res) => {
 export const logout = async (req, res) => {
     console.log(req.cookies);
     const { refreshToken } = req.cookies;
+    console.log('This should be the refresh token: ', refreshToken);
+    try {
+        if (refreshToken) {
+            await prisma.verificationToken.delete({
+                where: { token: refreshToken }
+            });
+        }
+        res.cookie('accessToken', '', {
+            expires: new Date(0),
+            httpOnly: true,
+        });
 
-    if (refreshToken) {
-        await prisma.verificationToken.delete({
-            where: { token: refreshToken }
-        })
+        res.cookie('refreshToken', '', {
+            expires: new Date(0),
+            httpOnly: true,
+        });
+        res.status(200).json({
+            success: true, message: 'User logged out successfully'
+        });
+    } catch (error) {
+        if (error.code === 'P2025') {
+            console.log('User token not found, user session logged in a different sesssion');
+            res.status(400).json({ success: false, message: 'Error loging out', code: 'NO_REFRESH_TOKEN' })
+        };
+        res.status(500).json({ success: false, message: 'Internal server error' })
     }
-    res.cookie('accessToken', '', {
-        expires: new Date(0),
-        httpOnly: true,
-    });
 
-    res.cookie('refreshToken', '', {
-        expires: new Date(0),
-        httpOnly: true,
-    });
-    res.status(200).json({ success: true, message: 'User logged out successfully' });
 
 }

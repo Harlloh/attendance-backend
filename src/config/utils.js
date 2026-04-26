@@ -18,13 +18,8 @@ export const generateAccessToken = (adminId, res) => {
 export const generateRefreshToken = async (adminId, res) => {
     const token = crypto.randomBytes(64).toString('hex');
     try {
-        await prisma.verificationToken.upsert({
-            where: { adminId },
-            update: {
-                token,
-                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-            },
-            create: {
+        await prisma.verificationToken.create({
+            data: {
                 token,
                 adminId,
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
