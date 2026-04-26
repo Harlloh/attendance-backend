@@ -21,6 +21,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }))
 
 
+app.use('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    })
+})
 app.use('/auth', authRoutes)
 app.use('/user', userRoute)
 // app.use()
