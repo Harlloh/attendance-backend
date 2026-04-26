@@ -17,7 +17,7 @@ export const authMiddleware = async (req, res, next) => {
                     code: 'NO_ACCESS_TOKEN'
                 })
             }
-
+            console.log('refresh token missing: ', token);
             return res.status(401).json({
                 error: 'Not authorized. Please sign in.',
                 code: 'NO_TOKEN'
@@ -44,6 +44,7 @@ export const authMiddleware = async (req, res, next) => {
                     });
                 }
                 // access token expired AND no refresh token
+                console.log('Refresh token expired: ');
                 return res.status(401).json({
                     error: 'Session expired. Please sign in again.',
                     code: 'NO_TOKEN'
@@ -51,6 +52,7 @@ export const authMiddleware = async (req, res, next) => {
             }
 
             if (error.name === 'JsonWebTokenError') {
+                console.log('invalid refresh token');
                 return res.status(401).json({
                     error: 'Invalid token',
                     code: 'NO_TOKEN'

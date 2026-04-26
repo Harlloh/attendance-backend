@@ -7,7 +7,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const SESSION_ID = 'cmoe2qbzl0000nkvak7yybbic'
+const SESSION_ID = 'cmoebm6um00007svafkf9v4ub';
 
 async function main() {
     const records = Array.from({ length: 50 }, (_, i) => ({
