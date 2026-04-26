@@ -78,17 +78,16 @@ export const registerController = async (req, res) => {
     }
 }
 
-
 export const refreshAccessToken = async (req, res) => {
     const { refreshToken } = req.cookies
     if (!refreshToken) {
-        return res.status(400).json({ success: false, message: "Refresh token missing!" })
+        return res.status(400).json({ success: false, message: "Refresh token missing!", code: 'NO_TOKEN' })
     }
 
     const token = await prisma.verificationToken.findFirst({
         where: { token: refreshToken }
     })
-
+    console.log(token);
     if (!token) {
         return res.status(400).json({ success: false, message: "Invalid refresh token missing!", code: 'INVALID_REFRESH_TOKEN' })
     }
