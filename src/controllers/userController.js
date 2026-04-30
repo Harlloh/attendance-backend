@@ -37,7 +37,7 @@ export const validateSession = async (req, res) => {
 
 }
 export const validateLocation = async (req, res) => {
-    const { checkInSlug, latitude, longitude } = req.query;
+    const { checkInSlug, latitude, longitude, accuracy } = req.query;
     if (!checkInSlug || !longitude || !latitude) {
         return res.status(400).json({ success: false, message: "A unique identifier, correct link, latitude and longitude are required" })
     }
@@ -64,13 +64,15 @@ export const validateLocation = async (req, res) => {
             parseFloat(latitude),
             parseFloat(longitude)
         );
+        const tolerance = lga.radius * 0.1
+        const withinRadius = distance <= (lga.radius + tolerance);
+        console.log(`Distance: ${distance}m, Radius: ${lga.radius}m, Within: ${withinRadius} with this location accuracy ${accuracy}`);
 
-        const withinRadius = distance <= lga.radius;
 
         res.status(200).json({
             success: true,
             withinRadius,
-            sessionId: lga.sessions.id
+            sessionId: lga.sessions[0].id
         })
     } catch (error) {
         console.error('Error validating location:', error.message)
