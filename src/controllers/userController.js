@@ -67,7 +67,8 @@ export const validateLocation = async (req, res) => {
         const tolerance = lga.radius * 0.1
         const withinRadius = distance <= (lga.radius + tolerance);
         console.log(`Distance: ${distance}m, Radius: ${lga.radius}m, Within: ${withinRadius} with this location accuracy ${accuracy}`);
-
+        console.log(lga.latitude,
+            lga.longitude, 'and this are the lat and lng from the user', latitude, longitude, lga.radius, accuracy);
 
         res.status(200).json({
             success: true,
