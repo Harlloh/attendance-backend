@@ -172,7 +172,7 @@ export const handleNumberAssignment = async (addedByAdmin, sessionId, stateCode,
                 name,
                 stateCode,
                 queueNumber: nextNumber,
-                deviceFingerprint: addedByAdmin ? null : deviceFingerprint,// resolve this first,
+                deviceFingerprint: addedByAdmin ? null : deviceFingerprint,
                 addedByAdmin,
             }
         })
@@ -241,3 +241,33 @@ export const searchAttendance = async (req, res) => {
         return res.status(500).json({ success: false, message: 'Internal server error' })
     }
 }
+
+export const getAdmin = async (req, res) => {
+    const adminId = req.admin.id;
+    try {
+        const adminExist = await prisma.admin.findUnique({
+            where: { id: adminId },
+            include: {
+                lga: true,
+                sessions: {
+                    take: 1,
+                    orderBy: {
+                        date: 'desc', // THIS defines "last session"
+                    },
+                },
+            },
+        });
+        console.log(adminExist);
+
+        return res.status(200).json({
+            lgaDetails: adminExist.lga,
+            session: adminExist.sessions[0],
+            success: true,
+            message: "LGA details gotten successfully"
+        });
+    } catch (error) {
+        console.error('Error getting LGA & Admin details:', error.message)
+        return res.status(500).json({ success: false, message: 'Internal server error' })
+    }
+
+};

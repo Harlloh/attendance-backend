@@ -7,25 +7,17 @@ export const getNumber = async (req, res) => {
         if (!stateCode || !name) {
             return res.status(401).json({ success: false, message: 'Name and statecode are required.' })
         }
-
         if (!browserId) {
             return res.status(401).json({ success: false, message: 'Please refresh your browser, unique id could not be generated for you.' })
         }
 
-        const lga = await prisma.lGA.findUnique({
-            where: { checkInSlug },
-            include: {
-                sessions: { where: { isOpen: true }, take: 1 }
-            }
-        });
-        console.log('88', lga, 'this is the lga that gives the session id');
+        const lga = await findLGA(checkInSlug);
+
         if (!lga || lga.sessions.length === 0) {
             return res.status(400).json({ success: false, message: "No active session", status: 'no_session' });
         }
 
         const sessionId = lga.sessions[0].id
-
-        console.log(sessionId, 'Session Id');
         // Check fingerprint first
         const existingByDevice = await prisma.attendanceRecord.findUnique({
             where: {
@@ -41,7 +33,6 @@ export const getNumber = async (req, res) => {
                 checkedInAt: existingByDevice.timestamp,
                 name: existingByDevice.name,
                 status: 'already_in'
-
             });
         }
 
@@ -51,7 +42,6 @@ export const getNumber = async (req, res) => {
                 sessionId_stateCode: { sessionId, stateCode }
             }
         });
-        // console.log(existingByStateCode, 'existing by statecode');
         if (existingByStateCode) {
             return res.status(200).json({
                 success: true,
@@ -60,10 +50,8 @@ export const getNumber = async (req, res) => {
                 checkedInAt: existingByStateCode.timestamp,
                 name: existingByStateCode.name,
                 status: 'already_in'
-
             });
         }
-        console.log(sessionId, stateCode, name, browserId);
         const record = await handleNumberAssignment(false, sessionId, stateCode, name, browserId);
         return res.status(201).json({
             success: true,
@@ -87,34 +75,13 @@ export const getNumber = async (req, res) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 export const validateSession = async (req, res) => {
     const { checkInSlug } = req.query;
     if (!checkInSlug) {
         return res.status(400).json({ success: false, message: "A unique identifier is required" })
     }
     try {
-        const lga = await prisma.lGA.findUnique({
-            where: { checkInSlug },
-            include: {
-                sessions: {
-                    where: { isOpen: true },
-                    take: 1
-                }
-            }
-        });
+        const lga = await findLGA(checkInSlug);
         if (!lga) {
             return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
         }
@@ -133,20 +100,12 @@ export const validateSession = async (req, res) => {
 
 }
 export const validateLocation = async (req, res) => {
-    const { checkInSlug, latitude, longitude, accuracy } = req.query;
+    const { checkInSlug, latitude, longitude } = req.query;
     if (!checkInSlug || !longitude || !latitude) {
         return res.status(400).json({ success: false, message: "A unique identifier, correct link, latitude and longitude are required" })
     }
     try {
-        const lga = await prisma.lGA.findUnique({
-            where: { checkInSlug },
-            include: {
-                sessions: {
-                    where: { isOpen: true },
-                    take: 1
-                }
-            }
-        });
+        const lga = await findLGA(checkInSlug);
         if (!lga) {
             return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
         }
@@ -162,9 +121,6 @@ export const validateLocation = async (req, res) => {
         );
         const tolerance = lga.radius * 0.1
         const withinRadius = distance <= (lga.radius + tolerance);
-        console.log(`Distance: ${distance}m, Radius: ${lga.radius}m, Within: ${withinRadius} with this location accuracy ${accuracy}`);
-        console.log(lga.latitude,
-            lga.longitude, 'and this are the lat and lng from the user', latitude, longitude, lga.radius, accuracy);
 
         res.status(200).json({
             success: true,
@@ -176,6 +132,17 @@ export const validateLocation = async (req, res) => {
         return res.status(500).json({ success: false, message: 'Internal server error' })
     }
 
+}
+const findLGA = async (checkInSlug) => {
+    return await prisma.lGA.findUnique({
+        where: { checkInSlug },
+        include: {
+            sessions: {
+                where: { isOpen: true },
+                take: 1
+            }
+        }
+    });
 }
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371000; // Earth radius in metres
