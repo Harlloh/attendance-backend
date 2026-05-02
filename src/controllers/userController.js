@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import redis from "../config/redis.js";
 import { handleNumberAssignment } from "./adminController.js";
 
 export const getNumber = async (req, res) => {
@@ -81,6 +82,18 @@ export const validateSession = async (req, res) => {
         return res.status(400).json({ success: false, message: "A unique identifier is required" })
     }
     try {
+
+        const cacheKey = `session:${checkInSlug}`;
+
+        //check cache first
+        const cached = await redis.get(cacheKey);
+        console.log(cached, 'Cached value');
+
+        if (cached) {
+            return res.status(200).json({ success: true, session: JSON.parse(cached) })
+        }
+
+        //cache miss - hit neon
         const lga = await findLGA(checkInSlug);
         if (!lga) {
             return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
@@ -89,16 +102,23 @@ export const validateSession = async (req, res) => {
         if (lga.sessions.length === 0) {
             return res.status(400).json({ success: false, message: 'No open session for this LGA.', status: 'no_session' });
         }
-        console.log(lga.sessions);
         const session = lga.sessions[0];
+
+        await redis.set(cacheKey, JSON.stringify(session), { EX: 10 })
+        // await redis.set(cacheKey, JSON.stringify(session), { EX: (3600 * 5) })
+        console.log(cacheKey, 'Supposed cache key from redis');
+        const verify = await redis.get(cacheKey);
+        console.log('Cached value exists:', !!verify);
 
         res.status(200).json({ success: true, session })
     } catch (error) {
         console.error('Error validating session:', error.message)
         return res.status(500).json({ success: false, message: 'Internal server error' })
     }
+};
 
-}
+
+
 export const validateLocation = async (req, res) => {
     const { checkInSlug, latitude, longitude } = req.query;
     if (!checkInSlug || !longitude || !latitude) {

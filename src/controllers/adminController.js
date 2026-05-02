@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import jwt from 'jsonwebtoken';
+import redis from "../config/redis.js";
 
 const generateSlug = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyz';
@@ -97,7 +98,7 @@ export const openSession = async (req, res) => {
 };
 
 export const closeSession = async (req, res) => {
-    const { sessionId } = req.body;
+    const { sessionId, checkInSlug } = req.body;
     if (!sessionId) {
         return res.status(400).json({ success: false, message: 'sessionId is required.' });
     }
@@ -122,6 +123,7 @@ export const closeSession = async (req, res) => {
                 closedAt: new Date(),
             }
         });
+        await redis.del(`session:${checkInSlug}`);
 
         res.status(200).json({ success: true, message: 'session closed successfully', session });
     } catch (error) {
