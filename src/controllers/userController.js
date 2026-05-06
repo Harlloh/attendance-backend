@@ -120,31 +120,51 @@ export const validateLocation = async (req, res) => {
     if (!checkInSlug || !longitude || !latitude) {
         return res.status(400).json({ success: false, message: "A unique identifier, correct link, latitude and longitude are required" })
     }
+
     try {
-        const lga = await findLGA(checkInSlug);
-        if (!lga) {
-            return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
+
+        const cachedKey = `lgaLocation:${checkInSlug}`;
+        let lgaData = null;
+        const cached = await redis.get(cachedKey);
+        console.log(cached, 'cached value location');
+        if (cached) {
+            lgaData = JSON.parse(cached);
+        } else {
+            const lga = await findLGA(checkInSlug);
+            if (!lga) {
+                return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
+            }
+
+            if (lga.sessions.length === 0) {
+                return res.status(400).json({ success: false, message: 'No open session for this LGA.', status: 'no_session' });
+            }
+            lgaData = {
+                latitude: lga.latitude,
+                longitude: lga.longitude,
+                radius: lga.radius,
+                sessionId: lga.sessions[0].id
+            };
+
+            // TTL of 60s — short enough that session-close propagates quickly
+            await redis.set(cachedKey, JSON.stringify(lgaData), 'EX', 3600);
         }
 
-        if (lga.sessions.length === 0) {
-            return res.status(400).json({ success: false, message: 'No open session for this LGA.', status: 'no_session' });
-        }
         const distance = haversineDistance(
-            lga.latitude,
-            lga.longitude,
+            lgaData.latitude,
+            lgaData.longitude,
             parseFloat(latitude),
             parseFloat(longitude)
         );
-        const tolerance = lga.radius * 0.1
-        const withinRadius = distance <= (lga.radius + tolerance);
+        const tolerance = lgaData.radius * 0.1
+        const withinRadius = distance <= (lgaData.radius + tolerance);
 
         res.status(200).json({
             success: true,
             withinRadius,
-            sessionId: lga.sessions[0].id
+            sessionId: lgaData.sessionId
         })
     } catch (error) {
-        console.error('Error validating location:', error.message)
+        console.error('Error validating location:', error)
         return res.status(500).json({ success: false, message: 'Internal server error' })
     }
 

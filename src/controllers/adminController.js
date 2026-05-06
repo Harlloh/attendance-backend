@@ -38,6 +38,7 @@ export const updateLgaDetails = async (req, res) => {
                 checkInSlug
             }
         })
+        await redis.del(`lgaLocation:${checkInSlug}`);
         res.json({ success: true, lga })
     } catch (error) {
         console.error('Admin update error:', error.message)
@@ -132,6 +133,8 @@ export const closeSession = async (req, res) => {
         });
         console.log(sessionExist.lga.checkInSlug, 'Checkin slug');
         await redis.del(`session:${sessionExist.lga.checkInSlug}`);
+        await redis.del(`lgaLocation:${checkInSlug}`);
+
         res.status(200).json({ success: true, message: 'session closed successfully', session });
     } catch (error) {
         console.error(error);
