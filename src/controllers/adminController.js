@@ -98,7 +98,7 @@ export const openSession = async (req, res) => {
 };
 
 export const closeSession = async (req, res) => {
-    const { sessionId, checkInSlug } = req.body;
+    const { sessionId } = req.body;
     if (!sessionId) {
         return res.status(400).json({ success: false, message: 'sessionId is required.' });
     }
@@ -107,7 +107,14 @@ export const closeSession = async (req, res) => {
     try {
 
         const sessionExist = await prisma.session.findUnique({
-            where: { id: sessionId, adminId }
+            where: { id: sessionId, adminId },
+            include: {
+                lga: {
+                    select: {
+                        checkInSlug: true
+                    }
+                }
+            }
         })
         if (!sessionExist) {
             return res.status(400).json({ success: false, message: "Session does not exist." })
@@ -123,8 +130,8 @@ export const closeSession = async (req, res) => {
                 closedAt: new Date(),
             }
         });
-        await redis.del(`session:${checkInSlug}`);
-
+        console.log(sessionExist.lga.checkInSlug, 'Checkin slug');
+        await redis.del(`session:${sessionExist.lga.checkInSlug}`);
         res.status(200).json({ success: true, message: 'session closed successfully', session });
     } catch (error) {
         console.error(error);

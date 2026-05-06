@@ -104,11 +104,7 @@ export const validateSession = async (req, res) => {
         }
         const session = lga.sessions[0];
 
-        await redis.set(cacheKey, JSON.stringify(session), { EX: 10 })
-        // await redis.set(cacheKey, JSON.stringify(session), { EX: (3600 * 5) })
-        console.log(cacheKey, 'Supposed cache key from redis');
-        const verify = await redis.get(cacheKey);
-        console.log('Cached value exists:', !!verify);
+        await redis.set(cacheKey, JSON.stringify(session), { EX: 3600 });
 
         res.status(200).json({ success: true, session })
     } catch (error) {
