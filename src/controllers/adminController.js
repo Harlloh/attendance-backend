@@ -47,10 +47,10 @@ export const updateLgaDetails = async (req, res) => {
 }
 export const openSession = async (req, res) => {
     const adminId = req.admin.id;
-    const { sessionId } = req.body
-    if (!sessionId) {
-        return res.status(400).json({ success: false, message: 'sessionId is required.' });
-    }
+    // const { sessionId } = req.body
+    // if (!sessionId) {
+    //     return res.status(400).json({ success: false, message: 'sessionId is required.' });
+    // }
     try {
         // need the admin's lgaId to associate the session
 
@@ -62,7 +62,6 @@ export const openSession = async (req, res) => {
             prisma.session.findFirst({
                 where: {
                     adminId,
-                    id: sessionId,
                     isOpen: true
                 }
             })
@@ -133,7 +132,7 @@ export const closeSession = async (req, res) => {
         });
         console.log(sessionExist.lga.checkInSlug, 'Checkin slug');
         await redis.del(`session:${sessionExist.lga.checkInSlug}`);
-        await redis.del(`lgaLocation:${checkInSlug}`);
+        await redis.del(`lgaLocation:${sessionExist.lga.checkInSlug}`);
 
         res.status(200).json({ success: true, message: 'session closed successfully', session });
     } catch (error) {
