@@ -181,6 +181,7 @@ const findLGA = async (checkInSlug) => {
     });
 }
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
+    console.log(lat1, lon1, lat2, lon2)
     const R = 6371000; // Earth radius in metres
     const toRad = (deg) => (deg * Math.PI) / 180;
 
