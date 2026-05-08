@@ -38,7 +38,7 @@ export const updateLgaDetails = async (req, res) => {
                 checkInSlug
             }
         })
-        await redis.del(`lgaLocation:${checkInSlug}`);
+        await redis.del(`lgaLocation:${lga.checkInSlug}`);
         res.json({ success: true, lga })
     } catch (error) {
         console.error('Admin update error:', error.message)
