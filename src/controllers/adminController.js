@@ -282,3 +282,85 @@ export const getAdmin = async (req, res) => {
     }
 
 };
+
+export const validateUser = async (req, res) => {
+    const { sessionId, stateCode, queueNumber, checkInSlug } = req.body;
+
+    if (!sessionId || !stateCode || !queueNumber || !checkInSlug) {
+        return res.status(400).json({
+            success: false,
+            message: 'sessionId, stateCode, queueNumber and checkInSlug are required.'
+        });
+    }
+
+    try {
+        // 1. Is session active?
+        const cachedSession = await redis.get(`session:${checkInSlug}`);
+        if (!cachedSession) {
+            return res.status(400).json({
+                success: false,
+                message: 'The session for this qr code has expired.',
+                status: 'session_ended'
+            });
+        }
+
+        // 2. Is this the CURRENT session? (catches old numbers)
+        const session = JSON.parse(cachedSession);
+        console.log(session, 'hmmm hello', sessionId);
+        if (session.id !== sessionId) {
+            return res.status(400).json({
+                success: false,
+                message: 'The session for this qr code has expired..',
+                status: 'session_ended'
+            });
+        }
+
+        // 3. Does this attendance record exist in Redis?
+        const attendanceKey = `attendance:${sessionId}:${queueNumber}`;
+        const cachedAttendance = await redis.get(attendanceKey);
+        if (!cachedAttendance) {
+            return res.status(400).json({
+                success: false,
+                message: 'This users attendance does not exist',
+                status: 'invalid_qr'
+            });
+        }
+
+        const attendance = JSON.parse(cachedAttendance);
+
+        // 4. Does stateCode match? (prevents tampered QRs)
+        if (attendance.stateCode !== stateCode) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid QR code.',
+                status: 'invalid_qr'
+            });
+        }
+
+        // 5. Already scanned?
+        // const scannedKey = `scanned:${sessionId}:${queueNumber}`;
+        // const alreadyScanned = await redis.get(scannedKey);
+        // if (alreadyScanned) {
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: 'This number has already been validated.',
+        //         status: 'already_scanned'
+        //     });
+        // }
+
+        // // 6. Mark as scanned
+        // await redis.set(scannedKey, '1', { EX: 86400 });
+
+        return res.status(200).json({
+            success: true,
+            status: 'valid',
+            name: attendance.name,
+            stateCode: attendance.stateCode,
+            queueNumber: attendance.queueNumber,
+        });
+
+    } catch (error) {
+        console.error('validateUser error:', error.message);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};

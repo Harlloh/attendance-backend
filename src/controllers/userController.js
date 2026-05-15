@@ -33,7 +33,10 @@ export const getNumber = async (req, res) => {
                 queueNumber: existingByDevice.queueNumber,
                 checkedInAt: existingByDevice.timestamp,
                 name: existingByDevice.name,
-                status: 'already_in'
+                stateCode: existingByDevice.stateCode,
+                status: 'already_in',
+                sessionId,
+
             });
         }
 
@@ -50,10 +53,17 @@ export const getNumber = async (req, res) => {
                 queueNumber: existingByStateCode.queueNumber,
                 checkedInAt: existingByStateCode.timestamp,
                 name: existingByStateCode.name,
-                status: 'already_in'
+                stateCode: existingByStateCode.stateCode,
+                status: 'already_in',
+                sessionId
             });
         }
         const record = await handleNumberAssignment(false, sessionId, stateCode, name, browserId);
+        await redis.set(
+            `attendance:${sessionId}:${record.queueNumber}`,
+            JSON.stringify({ name: record.name, stateCode: record.stateCode, queueNumber: record.queueNumber }),
+            { EX: 86400 } // 24hr - outlives any CDS session
+        );
         return res.status(201).json({
             success: true,
             alreadyCheckedIn: false,
@@ -61,7 +71,8 @@ export const getNumber = async (req, res) => {
             checkedInAt: record.timestamp,
             name: record.name,
             stateCode: record.stateCode,
-            status: 'success'
+            status: 'success',
+            sessionId
         });
 
     } catch (error) {
