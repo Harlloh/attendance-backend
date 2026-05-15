@@ -1,6 +1,8 @@
 import { prisma } from "../config/db.js";
 import jwt from 'jsonwebtoken';
 import redis from "../config/redis.js";
+import ExcelJS from 'exceljs';
+
 
 const generateSlug = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyz';
@@ -362,5 +364,128 @@ export const validateUser = async (req, res) => {
     } catch (error) {
         console.error('validateUser error:', error.message);
         return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
+
+export const getAllSessions = async (req, res) => {
+    const adminId = req.admin.id;
+    let { pageSize, pageIndex } = req.query;
+    pageSize = parseInt(pageSize)
+    pageIndex = parseInt(pageIndex)
+
+    if (!pageSize || !pageIndex) {
+        return res.status(400).json({ success: false, message: 'The pagesize and page index is required' })
+    }
+
+    try {
+        const skip = (pageIndex - 1) * pageSize
+        const [sessionList, totalCount] = await Promise.all([
+            prisma.session.findMany({
+                where: { adminId, isOpen: false },
+                take: pageSize,
+                skip,
+                orderBy: { date: 'desc' },
+                include: {
+                    _count: { select: { attendance: true } }
+                }
+            }),
+            prisma.session.count({
+                where: { adminId, isOpen: false }
+            })
+        ])
+        const formatted = sessionList.map(s => ({
+            id: s.id,
+            date: s.date,
+            openedAt: s.openedAt,
+            closedAt: s.closedAt,
+            totalCheckIns: s._count.attendance
+        }))
+        const hasMore = pageIndex * pageSize < totalCount
+
+        res.status(200).json({ success: true, message: 'Testing', sessionList: formatted, hasMore, totalCount })
+
+    } catch (error) {
+        console.error('Attendance list getting error:', error.message)
+        return res.status(500).json({ success: false, message: 'Internal server error' })
+    }
+}
+
+export const exportSession = async (req, res) => {
+    const adminId = req.admin.id;
+    const { sessionId } = req.params;
+
+    try {
+        // Verify session belongs to this admin
+        const session = await prisma.session.findFirst({
+            where: { id: sessionId, adminId },
+            select: { id: true, date: true }
+        });
+
+        if (!session) {
+            return res.status(404).json({ success: false, message: 'Session not found' });
+        }
+
+        const records = await prisma.attendanceRecord.findMany({
+            where: { sessionId },
+            orderBy: { queueNumber: 'asc' },
+            select: {
+                queueNumber: true,
+                name: true,
+                stateCode: true,
+                timestamp: true,
+            }
+        });
+
+        const dateStr = new Date(session.date).toISOString().split('T')[0];
+        const filename = `Attendance_${dateStr}.xlsx`;
+
+        //tells the browser what is coming is an excel file
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        //tells the browser to download it
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+
+        //this is the actual excel file
+        const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: true });
+        //the sheet is like the tabs inside, so in this case we are creating one sheet
+        const sheet = workbook.addWorksheet('Attendance');
+
+        sheet.columns = [
+            { header: 'Queue No.', key: 'queueNumber', width: 12 },
+            { header: 'Full Name', key: 'name', width: 35 },
+            { header: 'State Code', key: 'stateCode', width: 15 },
+            { header: 'Check-in Time', key: 'timestamp', width: 25 },
+        ];
+
+        // Bold the header row
+        sheet.getRow(1).font = { bold: true };
+        sheet.getRow(1).commit();
+        //always commit to the sheet after making an adjustment to it
+
+
+        //add all the records to the rows in the sheet
+        for (const record of records) {
+            sheet.addRow({
+                queueNumber: record.queueNumber,
+                name: record.name,
+                stateCode: record.stateCode,
+                timestamp: new Date(record.timestamp).toLocaleString('en-NG', {
+                    timeZone: 'Africa/Lagos',
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                }),
+            }).commit();
+        }
+
+        await sheet.commit();
+        await workbook.commit();
+        //so here we are not sending a normal json response, the workbook.commit is the final response
+
+    } catch (error) {
+        console.error('Export error:', error.message);
+        if (!res.headersSent) {
+            return res.status(500).json({ success: false, message: 'Export failed' });
+        }
     }
 };
