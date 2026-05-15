@@ -1,3 +1,5 @@
+import '../instrument.js'
+import * as Sentry from "@sentry/node";
 import express from 'express'
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -48,7 +50,7 @@ app.use((req, res) => {
     });
 });
 
-
+app.use(Sentry.expressErrorHandler());
 const server = app.listen(port, () => console.log(`listening to port ${port}`))
 
 
