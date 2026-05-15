@@ -92,6 +92,17 @@ export const openSession = async (req, res) => {
             }
         });
 
+        //create redis counter for all sessions that are just created. this might not be relevant since we already have a check for open session above, but just to be safe and to prevent
+        // const maxRecord = await prisma.attendanceRecord.findFirst({
+        //     where: { sessionId: session.id },
+        //     orderBy: { queueNumber: 'desc' },
+        //     select: {queueNumber:true}
+        // });
+
+        //initialize counter from the current max
+        await redis.set(`session: ${session.id}:counter`,0);
+        await redis.set(`session:${session.id}:open`, '1');
+
         res.status(201).json({ success: true, session });
     } catch (error) {
         console.error(error);
@@ -135,6 +146,8 @@ export const closeSession = async (req, res) => {
         console.log(sessionExist.lga.checkInSlug, 'Checkin slug');
         await redis.del(`session:${sessionExist.lga.checkInSlug}`);
         await redis.del(`lgaLocation:${sessionExist.lga.checkInSlug}`);
+        //this one is to prevent any new check-ins after session is closed, by invalidating the session in redis.
+        await redis.set(`session:${sessionId}:open`, '0');
 
         res.status(200).json({ success: true, message: 'session closed successfully', session });
     } catch (error) {
@@ -301,7 +314,7 @@ export const validateUser = async (req, res) => {
         if (!cachedSession) {
             return res.status(400).json({
                 success: false,
-                message: 'The session for this qr code has expired.',
+                message: 'The session for this qr code has expired. from invalid session in cache',
                 status: 'session_ended'
             });
         }

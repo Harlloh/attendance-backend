@@ -20,13 +20,15 @@ export const getNumber = async (req, res) => {
 
         const sessionId = lga.sessions[0].id
         // Check fingerprint first
-        const existingByDevice = await prisma.attendanceRecord.findUnique({
-            where: {
-                sessionId_deviceFingerprint: { sessionId, deviceFingerprint: browserId }
-            }
-        });
+        // const existingByDevice = await prisma.attendanceRecord.findUnique({
+        //     where: {
+        //         sessionId_deviceFingerprint: { sessionId, deviceFingerprint: browserId }
+        //     }
+        // });
+        let existingByDevice = await redis.get(`session:${sessionId}:device:${browserId}`);
         // console.log(existingByDevice, 'Existing device value');
         if (existingByDevice) {
+            existingByDevice = JSON.parse(existingByDevice);
             return res.status(200).json({
                 success: true,
                 alreadyCheckedIn: true,
@@ -41,12 +43,15 @@ export const getNumber = async (req, res) => {
         }
 
         // Check state code
-        const existingByStateCode = await prisma.attendanceRecord.findUnique({
-            where: {
-                sessionId_stateCode: { sessionId, stateCode }
-            }
-        });
+        // const existingByStateCode = await prisma.attendanceRecord.findUnique({
+        //     where: {
+        //         sessionId_stateCode: { sessionId, stateCode }
+        //     }
+        // });
+                let existingByStateCode = await redis.get(`session:${sessionId}:statecode:${stateCode}`);
+
         if (existingByStateCode) {
+            existingByStateCode = JSON.parse(existingByStateCode);
             return res.status(200).json({
                 success: true,
                 alreadyCheckedIn: true,
@@ -58,22 +63,57 @@ export const getNumber = async (req, res) => {
                 sessionId
             });
         }
-        const record = await handleNumberAssignment(false, sessionId, stateCode, name, browserId);
-        await redis.set(
-            `attendance:${sessionId}:${record.queueNumber}`,
-            JSON.stringify({ name: record.name, stateCode: record.stateCode, queueNumber: record.queueNumber }),
-            { EX: 86400 } // 24hr - outlives any CDS session
-        );
-        return res.status(201).json({
+
+        //fallback check to postgres in case of cache miss - ensures consistency even if it means hitting the DB more often than ideal
+        const existingRecord = await prisma.attendanceRecord.findFirst({
+            where: {
+                sessionId,
+                OR: [{ deviceFingerprint: browserId }, { stateCode }]
+            },
+            select: { queueNumber: true, name: true, stateCode: true, timestamp: true }
+        });
+        if (existingRecord) {
+            return res.status(200).json({
+                success: true,
+                alreadyCheckedIn: true,
+                queueNumber: existingRecord.queueNumber,
+                checkedInAt: existingRecord.timestamp,
+                name: existingRecord.name,
+                stateCode: existingRecord.stateCode,
+                status: 'already_in',
+                sessionId
+            });
+        }
+
+        //we increment the counter here
+        const queueNumber = await redis.incr(`session:${sessionId}:counter`);
+        const checkedInAt = new Date();
+
+        const recordData = JSON.stringify({ queueNumber, name, stateCode, checkedInAt });
+
+// 5. Register in Redis immediately so subsequent requests see it
+        await Promise.all([
+            redis.set(`session:${sessionId}:device:${browserId}`, recordData, { EX: 86400 }),
+            redis.set(`session:${sessionId}:statecode:${stateCode}`, recordData, { EX: 86400 }),
+            redis.set(`attendance:${sessionId}:${queueNumber}`, recordData, { EX: 86400 })
+        ]);
+
+
+        // 6. Respond immediately — Postgres write happens after this
+        res.status(201).json({
             success: true,
             alreadyCheckedIn: false,
-            queueNumber: record.queueNumber,
-            checkedInAt: record.timestamp,
-            name: record.name,
-            stateCode: record.stateCode,
+            queueNumber,
+            checkedInAt,
+            name,
+            stateCode,
             status: 'success',
             sessionId
         });
+
+
+          // 7. Write to Postgres in the background — does not block the response
+        writeAttendanceToDb({ sessionId, name, stateCode, queueNumber, browserId, checkedInAt });
 
     } catch (error) {
         console.error('Error getting number:', error.message)
@@ -81,6 +121,33 @@ export const getNumber = async (req, res) => {
 
     }
 }
+const writeAttendanceToDb = async ({ sessionId, name, stateCode, queueNumber, browserId, checkedInAt }, retries = 3) => {
+    try {
+        await prisma.attendanceRecord.create({
+            data: {
+                sessionId,
+                name,
+                stateCode,
+                queueNumber,
+                deviceFingerprint: browserId,
+                addedByAdmin: false,
+                timestamp: checkedInAt
+            }
+        });
+    } catch (error) {
+        if (retries > 0) {
+            setTimeout(
+                () => writeAttendanceToDb({ sessionId, name, stateCode, queueNumber, browserId, checkedInAt }, retries - 1),
+                2000
+            );
+        } else {
+            // All retries exhausted — log it so you can manually reconcile if needed
+            console.error('FAILED DB WRITE — manual reconciliation needed:', {
+                sessionId, stateCode, queueNumber, error: error.message
+            });
+        }
+    }
+};
 
 
 
