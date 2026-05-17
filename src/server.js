@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import adminRoutes from './routes/adminRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import userRoute from './routes/userRoutes.js'
-import { connectDB, disconnectDB } from './config/db.js';
+import { connectDB, disconnectDB, prisma } from './config/db.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
 
 connectDB();
