@@ -22,7 +22,7 @@ REST API for the NYSC CDS Attendance & Queue Management System. Handles session 
 ## Prerequisites
 
 - **Node.js** — Latest LTS version
-- **PostgreSQL** — A live database. The project is configured for [Neon](https://neon.tech) but any PostgreSQL provider works
+- **PostgreSQL** — A live database. The project is configured for [Neon](https://neon.com/) but any PostgreSQL provider works
 - **Redis** — Required. The four highest-traffic endpoints depend on Redis for caching. You can remove the caching logic if you intentionally don't want it, but it is strongly recommended
 
 ---
@@ -64,7 +64,7 @@ attendance-backend/
 ### 1. Clone and install dependencies
 
 ```bash
-git clone <repo-url>
+git clone <https://github.com/Harlloh/attendance-backend>
 cd attendance-backend
 npm install
 ```
@@ -75,7 +75,7 @@ Copy the example below into a `.env` file at the root of the project:
 
 ```env
 PORT=8000
-FRONTEND_URL='http://localhost:5173'
+FRONTEND_URL='set this to your local/deployed frontend server for cors'
 
 DATABASE_URL="postgresql://<user>:<password>@<host>/<db>?sslmode=require"
 
@@ -155,6 +155,7 @@ The API uses **JWT with access and refresh token rotation**:
 - **Refresh token** — Stored as an `httpOnly`, `secure`, `sameSite=none` cookie. Expiry controlled by `REFRESH_EXPIRY_TIME` (in days).
 - `GET /auth/refresh` exchanges a valid refresh token cookie for a new access token
 - `GET /auth/logout` clears the refresh token cookie and invalidates the session
+- Also note that you can use bearer token with the accessToken for testing on postman
 
 ---
 
@@ -164,7 +165,7 @@ The API uses **JWT with access and refresh token rotation**:
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/health` | Returns server status, uptime, and a basic database connectivity check. |
+| GET | `/health` | Returns server status, uptime, and a basic database connectivity check.(This is mainly because the project runs on a free tier hosting) |
 
 ---
 
@@ -176,13 +177,13 @@ The API uses **JWT with access and refresh token rotation**:
 | GET | `/auth/refresh` | Exchange a valid refresh token cookie for a new access token. |
 | GET | `/auth/logout` | Clear the refresh token cookie and invalidate the session. |
 
-> `POST /auth/register` exists in the codebase but is intentionally commented out.
+> `POST /auth/register` exists in the codebase but is intentionally commented out to prevent unauthorized account creation.
 
 ---
 
 ### Admin Routes — `/admin`
 
-All admin routes are protected by `authMiddleware`. A valid access token must be present on every request.
+All admin routes are protected by `authMiddleware`. A valid access token must be present on every request(using http only cookie or using the bearer token.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -231,7 +232,7 @@ Redis is used on the four endpoints expected to receive the highest concurrent t
 - `POST /user/getNumber`
 - `POST /admin/scan`
 
-To remove Redis from the project, remove the caching logic from these four endpoints and their associated files in `src/config/redis.js`.
+To remove Redis from the project, remove the caching logic from these four endpoints and their associated files.
 
 ---
 
