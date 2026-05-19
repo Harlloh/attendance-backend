@@ -1,274 +1,354 @@
 import { prisma } from "../config/db.js";
 import redis from "../config/redis.js";
-import { handleNumberAssignment } from "./adminController.js";
+// import { handleNumberAssignment } from "./adminController.js";
 
 export const getNumber = async (req, res) => {
-    try {
-        const { stateCode, name, browserId, checkInSlug } = req.body;
-        if (!stateCode || !name) {
-            return res.status(401).json({ success: false, message: 'Name and statecode are required.' })
-        }
-        if (!browserId) {
-            return res.status(401).json({ success: false, message: 'Please refresh your browser, unique id could not be generated for you.' })
-        }
-
-        const lga = await findLGA(checkInSlug);
-
-        if (!lga || lga.sessions.length === 0) {
-            return res.status(400).json({ success: false, message: "No active session", status: 'no_session' });
-        }
-
-        const sessionId = lga.sessions[0].id
-        // Check fingerprint first
-        // const existingByDevice = await prisma.attendanceRecord.findUnique({
-        //     where: {
-        //         sessionId_deviceFingerprint: { sessionId, deviceFingerprint: browserId }
-        //     }
-        // });
-        let existingByDevice = await redis.get(`session:${sessionId}:device:${browserId}`);
-        // console.log(existingByDevice, 'Existing device value');
-        if (existingByDevice) {
-            existingByDevice = JSON.parse(existingByDevice);
-            return res.status(200).json({
-                success: true,
-                alreadyCheckedIn: true,
-                queueNumber: existingByDevice.queueNumber,
-                checkedInAt: existingByDevice.timestamp,
-                name: existingByDevice.name,
-                stateCode: existingByDevice.stateCode,
-                status: 'already_in',
-                sessionId,
-
-            });
-        }
-
-        // Check state code
-        // const existingByStateCode = await prisma.attendanceRecord.findUnique({
-        //     where: {
-        //         sessionId_stateCode: { sessionId, stateCode }
-        //     }
-        // });
-                let existingByStateCode = await redis.get(`session:${sessionId}:statecode:${stateCode}`);
-
-        if (existingByStateCode) {
-            existingByStateCode = JSON.parse(existingByStateCode);
-            return res.status(200).json({
-                success: true,
-                alreadyCheckedIn: true,
-                queueNumber: existingByStateCode.queueNumber,
-                checkedInAt: existingByStateCode.timestamp,
-                name: existingByStateCode.name,
-                stateCode: existingByStateCode.stateCode,
-                status: 'already_in',
-                sessionId
-            });
-        }
-
-        //fallback check to postgres in case of cache miss - ensures consistency even if it means hitting the DB more often than ideal
-        const existingRecord = await prisma.attendanceRecord.findFirst({
-            where: {
-                sessionId,
-                OR: [{ deviceFingerprint: browserId }, { stateCode }]
-            },
-            select: { queueNumber: true, name: true, stateCode: true, timestamp: true }
-        });
-        if (existingRecord) {
-            return res.status(200).json({
-                success: true,
-                alreadyCheckedIn: true,
-                queueNumber: existingRecord.queueNumber,
-                checkedInAt: existingRecord.timestamp,
-                name: existingRecord.name,
-                stateCode: existingRecord.stateCode,
-                status: 'already_in',
-                sessionId
-            });
-        }
-
-        //we increment the counter here
-        const queueNumber = await redis.incr(`session:${sessionId}:counter`);
-        const checkedInAt = new Date();
-
-        const recordData = JSON.stringify({ queueNumber, name, stateCode, checkedInAt });
-
-// 5. Register in Redis immediately so subsequent requests see it
-        await Promise.all([
-            redis.set(`session:${sessionId}:device:${browserId}`, recordData, { EX: 86400 }),
-            redis.set(`session:${sessionId}:statecode:${stateCode}`, recordData, { EX: 86400 }),
-            redis.set(`attendance:${sessionId}:${queueNumber}`, recordData, { EX: 86400 })
-        ]);
-
-
-        // 6. Respond immediately — Postgres write happens after this
-        res.status(201).json({
-            success: true,
-            alreadyCheckedIn: false,
-            queueNumber,
-            checkedInAt,
-            name,
-            stateCode,
-            status: 'success',
-            sessionId
-        });
-
-
-          // 7. Write to Postgres in the background — does not block the response
-        writeAttendanceToDb({ sessionId, name, stateCode, queueNumber, browserId, checkedInAt });
-
-    } catch (error) {
-        console.error('Error getting number:', error.message)
-        return res.status(500).json({ success: false, message: 'Internal server error', status: 'error' })
-
+  try {
+    const { stateCode, name, browserId, checkInSlug } = req.body;
+    if (!stateCode || !name) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Name and statecode are required." });
     }
-}
-const writeAttendanceToDb = async ({ sessionId, name, stateCode, queueNumber, browserId, checkedInAt }, retries = 3) => {
-    try {
-        await prisma.attendanceRecord.create({
-            data: {
-                sessionId,
-                name,
-                stateCode,
-                queueNumber,
-                deviceFingerprint: browserId,
-                addedByAdmin: false,
-                timestamp: checkedInAt
-            }
+    if (!browserId) {
+      return res
+        .status(401)
+        .json({
+          success: false,
+          message:
+            "Please refresh your browser, unique id could not be generated for you.",
         });
-    } catch (error) {
-        if (retries > 0) {
-            setTimeout(
-                () => writeAttendanceToDb({ sessionId, name, stateCode, queueNumber, browserId, checkedInAt }, retries - 1),
-                2000
-            );
-        } else {
-            // All retries exhausted — log it so you can manually reconcile if needed
-            console.error('FAILED DB WRITE — manual reconciliation needed:', {
-                sessionId, stateCode, queueNumber, error: error.message
-            });
-        }
     }
+
+    const lga = await findLGA(checkInSlug);
+
+    if (!lga || lga.sessions.length === 0) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "No active session",
+          status: "no_session",
+        });
+    }
+
+    const sessionId = lga.sessions[0].id;
+    // Check fingerprint first
+    // const existingByDevice = await prisma.attendanceRecord.findUnique({
+    //     where: {
+    //         sessionId_deviceFingerprint: { sessionId, deviceFingerprint: browserId }
+    //     }
+    // });
+    let existingByDevice = await redis.get(
+      `session:${sessionId}:device:${browserId}`,
+    );
+    // console.log(existingByDevice, 'Existing device value');
+    if (existingByDevice) {
+      existingByDevice = JSON.parse(existingByDevice);
+      return res.status(200).json({
+        success: true,
+        alreadyCheckedIn: true,
+        queueNumber: existingByDevice.queueNumber,
+        checkedInAt: existingByDevice.timestamp,
+        name: existingByDevice.name,
+        stateCode: existingByDevice.stateCode,
+        status: "already_in",
+        sessionId,
+      });
+    }
+
+    // Check state code
+    // const existingByStateCode = await prisma.attendanceRecord.findUnique({
+    //     where: {
+    //         sessionId_stateCode: { sessionId, stateCode }
+    //     }
+    // });
+    let existingByStateCode = await redis.get(
+      `session:${sessionId}:statecode:${stateCode}`,
+    );
+
+    if (existingByStateCode) {
+      existingByStateCode = JSON.parse(existingByStateCode);
+      return res.status(200).json({
+        success: true,
+        alreadyCheckedIn: true,
+        queueNumber: existingByStateCode.queueNumber,
+        checkedInAt: existingByStateCode.timestamp,
+        name: existingByStateCode.name,
+        stateCode: existingByStateCode.stateCode,
+        status: "already_in",
+        sessionId,
+      });
+    }
+
+    //fallback check to postgres in case of cache miss - ensures consistency even if it means hitting the DB more often than ideal
+    const existingRecord = await prisma.attendanceRecord.findFirst({
+      where: {
+        sessionId,
+        OR: [{ deviceFingerprint: browserId }, { stateCode }],
+      },
+      select: {
+        queueNumber: true,
+        name: true,
+        stateCode: true,
+        timestamp: true,
+      },
+    });
+    if (existingRecord) {
+      return res.status(200).json({
+        success: true,
+        alreadyCheckedIn: true,
+        queueNumber: existingRecord.queueNumber,
+        checkedInAt: existingRecord.timestamp,
+        name: existingRecord.name,
+        stateCode: existingRecord.stateCode,
+        status: "already_in",
+        sessionId,
+      });
+    }
+
+    //we increment the counter here
+    const queueNumber = await redis.incr(`session:${sessionId}:counter`);
+    const checkedInAt = new Date();
+
+    const recordData = JSON.stringify({
+      queueNumber,
+      name,
+      stateCode,
+      checkedInAt,
+    });
+
+    // 5. Register in Redis immediately so subsequent requests see it
+    await Promise.all([
+      redis.set(`session:${sessionId}:device:${browserId}`, recordData, {
+        EX: 86400,
+      }),
+      redis.set(`session:${sessionId}:statecode:${stateCode}`, recordData, {
+        EX: 86400,
+      }),
+      redis.set(`attendance:${sessionId}:${queueNumber}`, recordData, {
+        EX: 86400,
+      }),
+    ]);
+
+    // 6. Respond immediately — Postgres write happens after this
+    res.status(201).json({
+      success: true,
+      alreadyCheckedIn: false,
+      queueNumber,
+      checkedInAt,
+      name,
+      stateCode,
+      status: "success",
+      sessionId,
+    });
+
+    // 7. Write to Postgres in the background — does not block the response
+    writeAttendanceToDb({
+      sessionId,
+      name,
+      stateCode,
+      queueNumber,
+      browserId,
+      checkedInAt,
+    });
+  } catch (error) {
+    console.error("Error getting number:", error.message);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message: "Internal server error",
+        status: "error",
+      });
+  }
 };
-
-
-
-
-
+const writeAttendanceToDb = async (
+  { sessionId, name, stateCode, queueNumber, browserId, checkedInAt },
+  retries = 3,
+) => {
+  try {
+    await prisma.attendanceRecord.create({
+      data: {
+        sessionId,
+        name,
+        stateCode,
+        queueNumber,
+        deviceFingerprint: browserId,
+        addedByAdmin: false,
+        timestamp: checkedInAt,
+      },
+    });
+  } catch (error) {
+    if (retries > 0) {
+      setTimeout(
+        () =>
+          writeAttendanceToDb(
+            { sessionId, name, stateCode, queueNumber, browserId, checkedInAt },
+            retries - 1,
+          ),
+        2000,
+      );
+    } else {
+      // All retries exhausted — log it so you can manually reconcile if needed
+      console.error("FAILED DB WRITE — manual reconciliation needed:", {
+        sessionId,
+        stateCode,
+        queueNumber,
+        error: error.message,
+      });
+    }
+  }
+};
 
 export const validateSession = async (req, res) => {
-    const { checkInSlug } = req.query;
-    if (!checkInSlug) {
-        return res.status(400).json({ success: false, message: "A unique identifier is required" })
+  const { checkInSlug } = req.query;
+  if (!checkInSlug) {
+    return res
+      .status(400)
+      .json({ success: false, message: "A unique identifier is required" });
+  }
+  try {
+    const cacheKey = `session:${checkInSlug}`;
+
+    //check cache first
+    const cached = await redis.get(cacheKey);
+    console.log(cached, "Cached value");
+
+    if (cached) {
+      return res
+        .status(200)
+        .json({ success: true, session: JSON.parse(cached) });
     }
-    try {
 
-        const cacheKey = `session:${checkInSlug}`;
-
-        //check cache first
-        const cached = await redis.get(cacheKey);
-        console.log(cached, 'Cached value');
-
-        if (cached) {
-            return res.status(200).json({ success: true, session: JSON.parse(cached) })
-        }
-
-        //cache miss - hit neon
-        const lga = await findLGA(checkInSlug);
-        if (!lga) {
-            return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
-        }
-
-        if (lga.sessions.length === 0) {
-            return res.status(400).json({ success: false, message: 'No open session for this LGA.', status: 'no_session' });
-        }
-        const session = lga.sessions[0];
-
-        await redis.set(cacheKey, JSON.stringify(session), { EX: 3600 });
-
-        res.status(200).json({ success: true, session })
-    } catch (error) {
-        console.error('Error validating session:', error.message)
-        return res.status(500).json({ success: false, message: 'Internal server error' })
+    //cache miss - hit neon
+    const lga = await findLGA(checkInSlug);
+    if (!lga) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message: "Invalid link.",
+          status: "invalid_link",
+        });
     }
+
+    if (lga.sessions.length === 0) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "No open session for this LGA.",
+          status: "no_session",
+        });
+    }
+    const session = lga.sessions[0];
+
+    await redis.set(cacheKey, JSON.stringify(session), { EX: 3600 });
+
+    res.status(200).json({ success: true, session });
+  } catch (error) {
+    console.error("Error validating session:", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
+  }
 };
 
-
-
 export const validateLocation = async (req, res) => {
-    const { checkInSlug, latitude, longitude } = req.query;
-    if (!checkInSlug || !longitude || !latitude) {
-        return res.status(400).json({ success: false, message: "A unique identifier, correct link, latitude and longitude are required" })
+  const { checkInSlug, latitude, longitude } = req.query;
+  if (!checkInSlug || !longitude || !latitude) {
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message:
+          "A unique identifier, correct link, latitude and longitude are required",
+      });
+  }
+
+  try {
+    const cachedKey = `lgaLocation:${checkInSlug}`;
+    let lgaData = null;
+    const cached = await redis.get(cachedKey);
+    console.log(cached, "cached value location");
+    if (cached) {
+      lgaData = JSON.parse(cached);
+    } else {
+      const lga = await findLGA(checkInSlug);
+      if (!lga) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message: "Invalid link.",
+            status: "invalid_link",
+          });
+      }
+
+      if (lga.sessions.length === 0) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "No open session for this LGA.",
+            status: "no_session",
+          });
+      }
+      lgaData = {
+        latitude: lga.latitude,
+        longitude: lga.longitude,
+        radius: lga.radius,
+        sessionId: lga.sessions[0].id,
+      };
+
+      // TTL of 60s — short enough that session-close propagates quickly
+      await redis.set(cachedKey, JSON.stringify(lgaData), "EX", 3600);
     }
 
-    try {
+    const distance = haversineDistance(
+      lgaData.latitude,
+      lgaData.longitude,
+      parseFloat(latitude),
+      parseFloat(longitude),
+    );
+    const tolerance = lgaData.radius * 0.1;
+    const withinRadius = distance <= lgaData.radius + tolerance;
 
-        const cachedKey = `lgaLocation:${checkInSlug}`;
-        let lgaData = null;
-        const cached = await redis.get(cachedKey);
-        console.log(cached, 'cached value location');
-        if (cached) {
-            lgaData = JSON.parse(cached);
-        } else {
-            const lga = await findLGA(checkInSlug);
-            if (!lga) {
-                return res.status(404).json({ success: false, message: 'Invalid link.', status: 'invalid_link' });
-            }
-
-            if (lga.sessions.length === 0) {
-                return res.status(400).json({ success: false, message: 'No open session for this LGA.', status: 'no_session' });
-            }
-            lgaData = {
-                latitude: lga.latitude,
-                longitude: lga.longitude,
-                radius: lga.radius,
-                sessionId: lga.sessions[0].id
-            };
-
-            // TTL of 60s — short enough that session-close propagates quickly
-            await redis.set(cachedKey, JSON.stringify(lgaData), 'EX', 3600);
-        }
-
-        const distance = haversineDistance(
-            lgaData.latitude,
-            lgaData.longitude,
-            parseFloat(latitude),
-            parseFloat(longitude)
-        );
-        const tolerance = lgaData.radius * 0.1
-        const withinRadius = distance <= (lgaData.radius + tolerance);
-
-        res.status(200).json({
-            success: true,
-            withinRadius,
-            sessionId: lgaData.sessionId
-        })
-    } catch (error) {
-        console.error('Error validating location:', error)
-        return res.status(500).json({ success: false, message: 'Internal server error' })
-    }
-
-}
-const findLGA = async (checkInSlug) => {
-    return await prisma.lGA.findUnique({
-        where: { checkInSlug },
-        include: {
-            sessions: {
-                where: { isOpen: true },
-                take: 1
-            }
-        }
+    res.status(200).json({
+      success: true,
+      withinRadius,
+      sessionId: lgaData.sessionId,
     });
-}
+  } catch (error) {
+    console.error("Error validating location:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
+  }
+};
+const findLGA = async (checkInSlug) => {
+  return await prisma.lGA.findUnique({
+    where: { checkInSlug },
+    include: {
+      sessions: {
+        where: { isOpen: true },
+        take: 1,
+      },
+    },
+  });
+};
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
-    console.log(lat1, lon1, lat2, lon2)
-    const R = 6371000; // Earth radius in metres
-    const toRad = (deg) => (deg * Math.PI) / 180;
+  console.log(lat1, lon1, lat2, lon2);
+  const R = 6371000; // Earth radius in metres
+  const toRad = (deg) => (deg * Math.PI) / 180;
 
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
 
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
 
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
