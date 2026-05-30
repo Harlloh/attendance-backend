@@ -23,22 +23,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }))
 
 
-app.get('/health', async (req, res) => {
-    try {
-        await prisma.$queryRaw`SELECT 1`;
-        res.status(200).json({
-            status: 'ok',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime()
-        });
-    } catch (error) {
-        res.status(503).json({
-            status: 'db_cold',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime()
-        });
-    }
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
 });
+
 app.use('/auth', authRoutes)
 app.use('/user', userRoute)
 // app.use()
