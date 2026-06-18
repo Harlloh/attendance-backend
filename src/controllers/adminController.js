@@ -469,18 +469,18 @@ export const validateUser = async (req, res) => {
     }
 
     // 5. Already scanned?
-    // const scannedKey = `scanned:${sessionId}:${queueNumber}`;
-    // const alreadyScanned = await redis.get(scannedKey);
-    // if (alreadyScanned) {
-    //     return res.status(400).json({
-    //         success: false,
-    //         message: 'This number has already been validated.',
-    //         status: 'already_scanned'
-    //     });
-    // }
+    const scannedKey = `scanned:${sessionId}:${queueNumber}`;
+    const alreadyScanned = await redis.get(scannedKey);
+    if (alreadyScanned) {
+      return res.status(400).json({
+        success: false,
+        message: "This number has already been validated.",
+        status: "already_scanned",
+      });
+    }
 
-    // // 6. Mark as scanned
-    // await redis.set(scannedKey, '1', { EX: 86400 });
+    // 6. Mark as scanned
+    await redis.set(scannedKey, "1", { EX: 86400 });
 
     return res.status(200).json({
       success: true,
